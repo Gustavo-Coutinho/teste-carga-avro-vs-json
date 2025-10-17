@@ -1,0 +1,34 @@
+{
+  "type": "record",
+  "name": "MensagemCarga",
+  "namespace": "br.com.sandbox.kafka.avro",
+  "doc": "Schema para mensagens de teste de carga",
+  "fields": [
+    {
+      "name": "id",
+      "type": "string",
+      "doc": "Identificador único da mensagem"
+    },
+    {
+      "name": "timestamp",
+      "type": "long",
+      "doc": "Timestamp de criação da mensagem em milissegundos"
+    },
+    {
+      "name": "sequencia",
+      "type": "long",
+      "doc": "Número de sequência da mensagem"
+    },
+    {
+      "name": "dados",
+      "type": "string",
+      "doc": "Dados da mensagem (JSON string com ~2MB)"
+    },
+    {
+      "name": "versao",
+      "type": "string",
+      "default": "1.0",
+      "doc": "Versão do schema"
+    }
+  ]
+}
