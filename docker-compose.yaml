@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  kafka-carga-app:
+    image: gupoco/teste-carga-avro-vs-json:latest
+    container_name: kafka-carga-sandbox
+    env_file:
+      - .env
+    environment:
+      - TIPO_APLICACAO=${TIPO_APLICACAO}
+      - KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS}
+      - KAFKA_CLUSTER_API_KEY=${KAFKA_CLUSTER_API_KEY}
+      - KAFKA_CLUSTER_API_SECRET=${KAFKA_CLUSTER_API_SECRET}
+      - SCHEMA_REGISTRY_URL=${SCHEMA_REGISTRY_URL}
+      - SCHEMA_REGISTRY_API_KEY=${SCHEMA_REGISTRY_API_KEY}
+      - SCHEMA_REGISTRY_API_SECRET=${SCHEMA_REGISTRY_API_SECRET}
+    networks:
+      - kafka-network
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+
+networks:
+  kafka-network:
+    driver: bridge
