@@ -1,6 +1,7 @@
 services:
   kafka-carga-app:
     image: gupoco/teste-carga-avro-vs-json:latest
+    pull_policy: always
     container_name: kafka-carga-sandbox
     env_file:
       - .env
