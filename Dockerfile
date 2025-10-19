@@ -1,4 +1,4 @@
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:17-jre
 
 LABEL maintainer="sandbox"
 LABEL description="Aplicação de teste de carga Kafka"
