@@ -33,12 +33,16 @@ public class ConsumidorJson {
         logger.info("Tópico: {}", TOPICO);
         logger.info("Grupo de consumidores: {}", GRUPO_CONSUMIDORES);
         
-        final long totalMensagensEsperadas = ConfiguracaoKafka.obterTotalMensagens();
+    final long totalMensagensEsperadas = ConfiguracaoKafka.obterTotalMensagens();
+    final long warmup = ConfiguracaoKafka.obterWarmupMensagens();
+    final boolean transporte = ConfiguracaoKafka.isTransporteMode();
+    final long totalAlvo = warmup + totalMensagensEsperadas;
         logger.info("Total de mensagens esperadas: {}", totalMensagensEsperadas);
 
-        Properties props = ConfiguracaoKafka.obterPropsConsumidor(false, GRUPO_CONSUMIDORES);
-        MetricasDesempenho metricas = new MetricasDesempenho();
-        long mensagensProcessadas = 0;
+    final int threads = ConfiguracaoKafka.obterConsumerThreads();
+    Properties props = ConfiguracaoKafka.obterPropsConsumidor(false, GRUPO_CONSUMIDORES);
+    MetricasDesempenho metricas = new MetricasDesempenho();
+    final long[] mensagensProcessadas = {0};
 
         // Adicionar shutdown hook
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -46,52 +50,93 @@ public class ConsumidorJson {
             executando.set(false);
         }));
 
-        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props)) {
-
-            consumer.subscribe(Collections.singletonList(TOPICO));
-            logger.info("Consumer JSON inscrito no tópico {}", TOPICO);
-
-            while (executando.get() && mensagensProcessadas < totalMensagensEsperadas) {
-                ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1000));
-
-                for (ConsumerRecord<String, String> record : records) {
-                    try {
-                        String mensagemJson = record.value();
-
-                        // Processar mensagem JSON
-                        long tamanho = mensagemJson.getBytes().length;
-                        metricas.registrarMensagem(tamanho, true);
-                        mensagensProcessadas++;
-
-                        if (mensagensProcessadas % INTERVALO_LOG == 0) {
-                            logger.info("Progresso: {} mensagens processadas ({} MB)", 
-                                mensagensProcessadas,
-                                String.format("%.2f", metricas.getTotalBytes() / (1024.0 * 1024.0)));
+        try {
+            Thread[] workers = new Thread[threads];
+            for (int t = 0; t < threads; t++) {
+                final int idx = t;
+                if (transporte) {
+                    workers[t] = new Thread(() -> {
+                        try (KafkaConsumer<String, byte[]> consumer = new KafkaConsumer<>(props)) {
+                            consumer.subscribe(Collections.singletonList(TOPICO));
+                            while (executando.get() && mensagensProcessadas[0] < totalAlvo) {
+                                ConsumerRecords<String, byte[]> records = consumer.poll(Duration.ofMillis(1000));
+                                for (ConsumerRecord<String, byte[]> record : records) {
+                                    try {
+                                        long tamanho = record.serializedValueSize();
+                                        long total = ++mensagensProcessadas[0];
+                                        if (total > warmup) {
+                                            metricas.registrarMensagem(tamanho, true);
+                                        }
+                                        if (total % INTERVALO_LOG == 0) {
+                                            logger.info("Progresso: {} mensagens processadas ({} MB)", 
+                                                total,
+                                                String.format("%.2f", metricas.getTotalBytes() / (1024.0 * 1024.0)));
+                                        }
+                                    } catch (Exception e) {
+                                        logger.error("Erro ao processar mensagem", e);
+                                        metricas.registrarMensagem(0, false);
+                                    }
+                                }
+                                if (mensagensProcessadas[0] % 10000 == 0) {
+                                    consumer.commitSync();
+                                }
+                            }
+                            consumer.commitSync();
+                        } catch (Exception e) {
+                            logger.error("Erro em worker do consumidor", e);
                         }
-
-                    } catch (Exception e) {
-                        logger.error("Erro ao processar mensagem", e);
-                        metricas.registrarMensagem(0, false);
-                    }
+                    }, "consumidor-json-bytes-" + idx);
+                } else {
+                    workers[t] = new Thread(() -> {
+                        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props)) {
+                            consumer.subscribe(Collections.singletonList(TOPICO));
+                            while (executando.get() && mensagensProcessadas[0] < totalAlvo) {
+                                ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1000));
+                                for (ConsumerRecord<String, String> record : records) {
+                                    try {
+                                        String mensagemJson = record.value();
+                                        long tamanho = record.serializedValueSize();
+                                        // parse leve com Gson para simetria com Avro decode
+                                        br.com.sandbox.kafka.util.GeradorMensagemJson.deJson(mensagemJson);
+                                        long total = ++mensagensProcessadas[0];
+                                        if (total > warmup) {
+                                            metricas.registrarMensagem(tamanho, true);
+                                        }
+                                        if (total % INTERVALO_LOG == 0) {
+                                            logger.info("Progresso: {} mensagens processadas ({} MB)", 
+                                                total,
+                                                String.format("%.2f", metricas.getTotalBytes() / (1024.0 * 1024.0)));
+                                        }
+                                    } catch (Exception e) {
+                                        logger.error("Erro ao processar mensagem", e);
+                                        metricas.registrarMensagem(0, false);
+                                    }
+                                }
+                                if (mensagensProcessadas[0] % 10000 == 0) {
+                                    consumer.commitSync();
+                                }
+                            }
+                            consumer.commitSync();
+                        } catch (Exception e) {
+                            logger.error("Erro em worker do consumidor", e);
+                        }
+                    }, "consumidor-json-" + idx);
                 }
-
-                // Commit periódico
-                if (mensagensProcessadas % 10000 == 0) {
-                    consumer.commitSync();
-                }
+                workers[t].start();
             }
 
-            consumer.commitSync();
-            metricas.finalizar();
+            for (Thread w : workers) {
+                w.join();
+            }
 
+            metricas.finalizar();
             logger.info("Consumo concluído!");
             metricas.imprimirRelatorio();
-
-            // Enviar métricas
             enviarMetricas(metricas);
 
-        } catch (Exception e) {
-            logger.error("Erro fatal no consumidor", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            logger.error("Execução interrompida", e);
             System.exit(1);
         }
     }

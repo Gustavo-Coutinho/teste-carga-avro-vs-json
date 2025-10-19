@@ -1,7 +1,7 @@
 package br.com.sandbox.kafka.aplicacoes;
 
 import br.com.sandbox.kafka.util.ConfiguracaoKafka;
-import br.com.sandbox.kafka.util.GeradorMensagemJson;
+import br.com.sandbox.kafka.util.GeradorCargaEstruturada;
 import br.com.sandbox.kafka.util.MetricasDesempenho;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -30,31 +30,44 @@ public class ProdutorJson {
         logger.info("Total de mensagens a enviar: {}", totalMensagens);
 
         Properties props = ConfiguracaoKafka.obterPropsProdutor(false);
-        MetricasDesempenho metricas = new MetricasDesempenho();
+    MetricasDesempenho metricas = new MetricasDesempenho();
         AtomicLong mensagensEnviadas = new AtomicLong(0);
+    final long warmup = ConfiguracaoKafka.obterWarmupMensagens();
 
-        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
+    try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
 
             logger.info("Producer JSON criado com sucesso");
 
             // Enviar mensagens
+            int numParticoes = ConfiguracaoKafka.obterNumParticoes();
+            try {
+                int metaParts = producer.partitionsFor(TOPICO_MENSAGENS).size();
+                if (metaParts > 0) {
+                    numParticoes = metaParts;
+                }
+            } catch (Exception e) {
+                logger.warn("Não foi possível obter número de partições via metadata, usando valor de configuração: {}", numParticoes);
+            }
             for (long i = 1; i <= totalMensagens; i++) {
                 try {
-                    // Gerar mensagem JSON de ~2MB (mesma estrutura do Avro)
-                    String mensagemJson = GeradorMensagemJson.gerarMensagem2MB(i);
+                    // Gerar mensagem JSON estruturada (mesma estrutura do Avro)
+                    String mensagemJson = GeradorCargaEstruturada.gerarJsonEstruturado(i);
 
                     String chave = "msg-" + i;
+                    // Distribui explicitamente pelas partições 0..numParticoes-1
+                    int particao = (int)((i - 1) % numParticoes);
                     ProducerRecord<String, String> record = 
-                        new ProducerRecord<>(TOPICO_MENSAGENS, chave, mensagemJson);
+                        new ProducerRecord<>(TOPICO_MENSAGENS, particao, chave, mensagemJson);
 
                     // Enviar de forma assíncrona
                     final long sequenciaAtual = i;
                     producer.send(record, (RecordMetadata metadata, Exception exception) -> {
                         if (exception == null) {
-                            long tamanho = mensagemJson.getBytes().length;
-                            metricas.registrarMensagem(tamanho, true);
-
                             long count = mensagensEnviadas.incrementAndGet();
+                            long serializedBytes = metadata.serializedValueSize();
+                            if (count > warmup) {
+                                metricas.registrarMensagem(serializedBytes, true);
+                            }
                             if (count % INTERVALO_LOG == 0) {
                                 logger.info("Progresso: {} mensagens enviadas ({} MB processados)", 
                                     count,
