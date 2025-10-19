@@ -15,10 +15,10 @@ import org.apache.avro.message.SchemaStore;
 /** Schema para mensagens de teste de carga */
 @org.apache.avro.specific.AvroGenerated
 public class MensagemCarga extends org.apache.avro.specific.SpecificRecordBase implements org.apache.avro.specific.SpecificRecord {
-  private static final long serialVersionUID = -9037787665670778562L;
+  private static final long serialVersionUID = 2717958453768620874L;
 
 
-  public static final org.apache.avro.Schema SCHEMA$ = new org.apache.avro.Schema.Parser().parse("{\"type\":\"record\",\"name\":\"MensagemCarga\",\"namespace\":\"br.com.sandbox.kafka.avro\",\"doc\":\"Schema para mensagens de teste de carga\",\"fields\":[{\"name\":\"id\",\"type\":\"string\",\"doc\":\"Identificador único da mensagem\"},{\"name\":\"timestamp\",\"type\":\"long\",\"doc\":\"Timestamp de criação da mensagem em milissegundos\"},{\"name\":\"sequencia\",\"type\":\"long\",\"doc\":\"Número de sequência da mensagem\"},{\"name\":\"dados\",\"type\":\"string\",\"doc\":\"Dados da mensagem (JSON string com ~2MB)\"},{\"name\":\"versao\",\"type\":\"string\",\"doc\":\"Versão do schema\",\"default\":\"1.0\"}]}");
+  public static final org.apache.avro.Schema SCHEMA$ = new org.apache.avro.Schema.Parser().parse("{\"type\":\"record\",\"name\":\"MensagemCarga\",\"namespace\":\"br.com.sandbox.kafka.avro\",\"doc\":\"Schema para mensagens de teste de carga\",\"fields\":[{\"name\":\"id\",\"type\":\"string\",\"doc\":\"Identificador único da mensagem\"},{\"name\":\"timestamp\",\"type\":\"long\",\"doc\":\"Timestamp de criação da mensagem em milissegundos\"},{\"name\":\"sequencia\",\"type\":\"long\",\"doc\":\"Número de sequência da mensagem\"},{\"name\":\"dados\",\"type\":{\"type\":\"array\",\"items\":{\"type\":\"record\",\"name\":\"Registro\",\"fields\":[{\"name\":\"indice\",\"type\":\"int\"},{\"name\":\"texto\",\"type\":\"string\"},{\"name\":\"numero\",\"type\":\"double\"},{\"name\":\"timestamp\",\"type\":\"long\"},{\"name\":\"uuid\",\"type\":\"string\"}]}},\"doc\":\"Dados estruturados da mensagem\"},{\"name\":\"versao\",\"type\":\"string\",\"doc\":\"Versão do schema\",\"default\":\"1.0\"}]}");
   public static org.apache.avro.Schema getClassSchema() { return SCHEMA$; }
 
   private static final SpecificData MODEL$ = new SpecificData();
@@ -80,8 +80,8 @@ public class MensagemCarga extends org.apache.avro.specific.SpecificRecordBase i
   private long timestamp;
   /** Número de sequência da mensagem */
   private long sequencia;
-  /** Dados da mensagem (JSON string com ~2MB) */
-  private java.lang.CharSequence dados;
+  /** Dados estruturados da mensagem */
+  private java.util.List<br.com.sandbox.kafka.avro.Registro> dados;
   /** Versão do schema */
   private java.lang.CharSequence versao;
 
@@ -97,10 +97,10 @@ public class MensagemCarga extends org.apache.avro.specific.SpecificRecordBase i
    * @param id Identificador único da mensagem
    * @param timestamp Timestamp de criação da mensagem em milissegundos
    * @param sequencia Número de sequência da mensagem
-   * @param dados Dados da mensagem (JSON string com ~2MB)
+   * @param dados Dados estruturados da mensagem
    * @param versao Versão do schema
    */
-  public MensagemCarga(java.lang.CharSequence id, java.lang.Long timestamp, java.lang.Long sequencia, java.lang.CharSequence dados, java.lang.CharSequence versao) {
+  public MensagemCarga(java.lang.CharSequence id, java.lang.Long timestamp, java.lang.Long sequencia, java.util.List<br.com.sandbox.kafka.avro.Registro> dados, java.lang.CharSequence versao) {
     this.id = id;
     this.timestamp = timestamp;
     this.sequencia = sequencia;
@@ -135,7 +135,7 @@ public class MensagemCarga extends org.apache.avro.specific.SpecificRecordBase i
     case 0: id = (java.lang.CharSequence)value$; break;
     case 1: timestamp = (java.lang.Long)value$; break;
     case 2: sequencia = (java.lang.Long)value$; break;
-    case 3: dados = (java.lang.CharSequence)value$; break;
+    case 3: dados = (java.util.List<br.com.sandbox.kafka.avro.Registro>)value$; break;
     case 4: versao = (java.lang.CharSequence)value$; break;
     default: throw new IndexOutOfBoundsException("Invalid index: " + field$);
     }
@@ -197,19 +197,19 @@ public class MensagemCarga extends org.apache.avro.specific.SpecificRecordBase i
 
   /**
    * Gets the value of the 'dados' field.
-   * @return Dados da mensagem (JSON string com ~2MB)
+   * @return Dados estruturados da mensagem
    */
-  public java.lang.CharSequence getDados() {
+  public java.util.List<br.com.sandbox.kafka.avro.Registro> getDados() {
     return dados;
   }
 
 
   /**
    * Sets the value of the 'dados' field.
-   * Dados da mensagem (JSON string com ~2MB)
+   * Dados estruturados da mensagem
    * @param value the value to set.
    */
-  public void setDados(java.lang.CharSequence value) {
+  public void setDados(java.util.List<br.com.sandbox.kafka.avro.Registro> value) {
     this.dados = value;
   }
 
@@ -278,8 +278,8 @@ public class MensagemCarga extends org.apache.avro.specific.SpecificRecordBase i
     private long timestamp;
     /** Número de sequência da mensagem */
     private long sequencia;
-    /** Dados da mensagem (JSON string com ~2MB) */
-    private java.lang.CharSequence dados;
+    /** Dados estruturados da mensagem */
+    private java.util.List<br.com.sandbox.kafka.avro.Registro> dados;
     /** Versão do schema */
     private java.lang.CharSequence versao;
 
@@ -476,21 +476,21 @@ public class MensagemCarga extends org.apache.avro.specific.SpecificRecordBase i
 
     /**
       * Gets the value of the 'dados' field.
-      * Dados da mensagem (JSON string com ~2MB)
+      * Dados estruturados da mensagem
       * @return The value.
       */
-    public java.lang.CharSequence getDados() {
+    public java.util.List<br.com.sandbox.kafka.avro.Registro> getDados() {
       return dados;
     }
 
 
     /**
       * Sets the value of the 'dados' field.
-      * Dados da mensagem (JSON string com ~2MB)
+      * Dados estruturados da mensagem
       * @param value The value of 'dados'.
       * @return This builder.
       */
-    public br.com.sandbox.kafka.avro.MensagemCarga.Builder setDados(java.lang.CharSequence value) {
+    public br.com.sandbox.kafka.avro.MensagemCarga.Builder setDados(java.util.List<br.com.sandbox.kafka.avro.Registro> value) {
       validate(fields()[3], value);
       this.dados = value;
       fieldSetFlags()[3] = true;
@@ -499,7 +499,7 @@ public class MensagemCarga extends org.apache.avro.specific.SpecificRecordBase i
 
     /**
       * Checks whether the 'dados' field has been set.
-      * Dados da mensagem (JSON string com ~2MB)
+      * Dados estruturados da mensagem
       * @return True if the 'dados' field has been set, false otherwise.
       */
     public boolean hasDados() {
@@ -509,7 +509,7 @@ public class MensagemCarga extends org.apache.avro.specific.SpecificRecordBase i
 
     /**
       * Clears the value of the 'dados' field.
-      * Dados da mensagem (JSON string com ~2MB)
+      * Dados estruturados da mensagem
       * @return This builder.
       */
     public br.com.sandbox.kafka.avro.MensagemCarga.Builder clearDados() {
@@ -570,7 +570,7 @@ public class MensagemCarga extends org.apache.avro.specific.SpecificRecordBase i
         record.id = fieldSetFlags()[0] ? this.id : (java.lang.CharSequence) defaultValue(fields()[0]);
         record.timestamp = fieldSetFlags()[1] ? this.timestamp : (java.lang.Long) defaultValue(fields()[1]);
         record.sequencia = fieldSetFlags()[2] ? this.sequencia : (java.lang.Long) defaultValue(fields()[2]);
-        record.dados = fieldSetFlags()[3] ? this.dados : (java.lang.CharSequence) defaultValue(fields()[3]);
+        record.dados = fieldSetFlags()[3] ? this.dados : (java.util.List<br.com.sandbox.kafka.avro.Registro>) defaultValue(fields()[3]);
         record.versao = fieldSetFlags()[4] ? this.versao : (java.lang.CharSequence) defaultValue(fields()[4]);
         return record;
       } catch (org.apache.avro.AvroMissingFieldException e) {
@@ -610,7 +610,18 @@ public class MensagemCarga extends org.apache.avro.specific.SpecificRecordBase i
 
     out.writeLong(this.sequencia);
 
-    out.writeString(this.dados);
+    long size0 = this.dados.size();
+    out.writeArrayStart();
+    out.setItemCount(size0);
+    long actualSize0 = 0;
+    for (br.com.sandbox.kafka.avro.Registro e0: this.dados) {
+      actualSize0++;
+      out.startItem();
+      e0.customEncode(out);
+    }
+    out.writeArrayEnd();
+    if (actualSize0 != size0)
+      throw new java.util.ConcurrentModificationException("Array-size written was " + size0 + ", but element count was " + actualSize0 + ".");
 
     out.writeString(this.versao);
 
@@ -627,7 +638,23 @@ public class MensagemCarga extends org.apache.avro.specific.SpecificRecordBase i
 
       this.sequencia = in.readLong();
 
-      this.dados = in.readString(this.dados instanceof Utf8 ? (Utf8)this.dados : null);
+      long size0 = in.readArrayStart();
+      java.util.List<br.com.sandbox.kafka.avro.Registro> a0 = this.dados;
+      if (a0 == null) {
+        a0 = new SpecificData.Array<br.com.sandbox.kafka.avro.Registro>((int)size0, SCHEMA$.getField("dados").schema());
+        this.dados = a0;
+      } else a0.clear();
+      SpecificData.Array<br.com.sandbox.kafka.avro.Registro> ga0 = (a0 instanceof SpecificData.Array ? (SpecificData.Array<br.com.sandbox.kafka.avro.Registro>)a0 : null);
+      for ( ; 0 < size0; size0 = in.arrayNext()) {
+        for ( ; size0 != 0; size0--) {
+          br.com.sandbox.kafka.avro.Registro e0 = (ga0 != null ? ga0.peek() : null);
+          if (e0 == null) {
+            e0 = new br.com.sandbox.kafka.avro.Registro();
+          }
+          e0.customDecode(in);
+          a0.add(e0);
+        }
+      }
 
       this.versao = in.readString(this.versao instanceof Utf8 ? (Utf8)this.versao : null);
 
@@ -647,7 +674,23 @@ public class MensagemCarga extends org.apache.avro.specific.SpecificRecordBase i
           break;
 
         case 3:
-          this.dados = in.readString(this.dados instanceof Utf8 ? (Utf8)this.dados : null);
+          long size0 = in.readArrayStart();
+          java.util.List<br.com.sandbox.kafka.avro.Registro> a0 = this.dados;
+          if (a0 == null) {
+            a0 = new SpecificData.Array<br.com.sandbox.kafka.avro.Registro>((int)size0, SCHEMA$.getField("dados").schema());
+            this.dados = a0;
+          } else a0.clear();
+          SpecificData.Array<br.com.sandbox.kafka.avro.Registro> ga0 = (a0 instanceof SpecificData.Array ? (SpecificData.Array<br.com.sandbox.kafka.avro.Registro>)a0 : null);
+          for ( ; 0 < size0; size0 = in.arrayNext()) {
+            for ( ; size0 != 0; size0--) {
+              br.com.sandbox.kafka.avro.Registro e0 = (ga0 != null ? ga0.peek() : null);
+              if (e0 == null) {
+                e0 = new br.com.sandbox.kafka.avro.Registro();
+              }
+              e0.customDecode(in);
+              a0.add(e0);
+            }
+          }
           break;
 
         case 4:

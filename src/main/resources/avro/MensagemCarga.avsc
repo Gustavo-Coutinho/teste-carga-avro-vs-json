@@ -4,31 +4,27 @@
   "namespace": "br.com.sandbox.kafka.avro",
   "doc": "Schema para mensagens de teste de carga",
   "fields": [
-    {
-      "name": "id",
-      "type": "string",
-      "doc": "Identificador único da mensagem"
-    },
-    {
-      "name": "timestamp",
-      "type": "long",
-      "doc": "Timestamp de criação da mensagem em milissegundos"
-    },
-    {
-      "name": "sequencia",
-      "type": "long",
-      "doc": "Número de sequência da mensagem"
-    },
+    { "name": "id", "type": "string", "doc": "Identificador único da mensagem" },
+    { "name": "timestamp", "type": "long", "doc": "Timestamp de criação da mensagem em milissegundos" },
+    { "name": "sequencia", "type": "long", "doc": "Número de sequência da mensagem" },
     {
       "name": "dados",
-      "type": "string",
-      "doc": "Dados da mensagem (JSON string com ~2MB)"
+      "type": {
+        "type": "array",
+        "items": {
+          "type": "record",
+          "name": "Registro",
+          "fields": [
+            { "name": "indice", "type": "int" },
+            { "name": "texto", "type": "string" },
+            { "name": "numero", "type": "double" },
+            { "name": "timestamp", "type": "long" },
+            { "name": "uuid", "type": "string" }
+          ]
+        }
+      },
+      "doc": "Dados estruturados da mensagem"
     },
-    {
-      "name": "versao",
-      "type": "string",
-      "default": "1.0",
-      "doc": "Versão do schema"
-    }
+    { "name": "versao", "type": "string", "default": "1.0", "doc": "Versão do schema" }
   ]
 }

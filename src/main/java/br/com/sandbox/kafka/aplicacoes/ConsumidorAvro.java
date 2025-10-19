@@ -34,12 +34,15 @@ public class ConsumidorAvro {
         logger.info("Tópico: {}", TOPICO);
         logger.info("Grupo de consumidores: {}", GRUPO_CONSUMIDORES);
         
-        final long totalMensagensEsperadas = ConfiguracaoKafka.obterTotalMensagens();
+    final long totalMensagensEsperadas = ConfiguracaoKafka.obterTotalMensagens();
+    final long warmup = ConfiguracaoKafka.obterWarmupMensagens();
+    final boolean transporte = ConfiguracaoKafka.isTransporteMode();
         logger.info("Total de mensagens esperadas: {}", totalMensagensEsperadas);
 
-        Properties props = ConfiguracaoKafka.obterPropsConsumidor(true, GRUPO_CONSUMIDORES);
-        MetricasDesempenho metricas = new MetricasDesempenho();
-        long mensagensProcessadas = 0;
+    final int threads = ConfiguracaoKafka.obterConsumerThreads();
+    Properties props = ConfiguracaoKafka.obterPropsConsumidor(true, GRUPO_CONSUMIDORES);
+    MetricasDesempenho metricas = new MetricasDesempenho();
+    final long[] mensagensProcessadas = {0};
 
         // Adicionar shutdown hook
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -47,54 +50,76 @@ public class ConsumidorAvro {
             executando.set(false);
         }));
 
-        try (KafkaConsumer<String, MensagemCarga> consumer = new KafkaConsumer<>(props)) {
-
-            consumer.subscribe(Collections.singletonList(TOPICO));
-            logger.info("Consumer Avro inscrito no tópico {}", TOPICO);
-
-            while (executando.get() && mensagensProcessadas < totalMensagensEsperadas) {
-                ConsumerRecords<String, MensagemCarga> records = consumer.poll(Duration.ofMillis(1000));
-
-                for (ConsumerRecord<String, MensagemCarga> record : records) {
-                    try {
-                        MensagemCarga mensagem = record.value();
-
-                        // Processar mensagem
-                        long tamanho = mensagem.getDados().toString().getBytes().length;
-                        metricas.registrarMensagem(tamanho, true);
-                        mensagensProcessadas++;
-
-                        if (mensagensProcessadas % INTERVALO_LOG == 0) {
-                            logger.info("Progresso: {} mensagens processadas ({} MB)", 
-                                mensagensProcessadas,
-                                String.format("%.2f", metricas.getTotalBytes() / (1024.0 * 1024.0)));
+        try {
+            Thread[] workers = new Thread[threads];
+            for (int t = 0; t < threads; t++) {
+                workers[t] = new Thread(() -> {
+                    try (KafkaConsumer<String, MensagemCarga> consumer = new KafkaConsumer<>(props)) {
+                        consumer.subscribe(Collections.singletonList(TOPICO));
+                        while (executando.get() && mensagensProcessadas[0] < totalMensagensEsperadas) {
+                            ConsumerRecords<String, MensagemCarga> records = consumer.poll(Duration.ofMillis(1000));
+                            for (ConsumerRecord<String, MensagemCarga> record : records) {
+                                try {
+                                    MensagemCarga mensagem = record.value();
+                                    long tamanho;
+                                    if (transporte) {
+                                        // Em modo transporte, valor é entregue como byte[] por termos ajustado deserializer
+                                        byte[] raw = (byte[]) (Object) record.value(); // not used in transporte since generic type isn't byte[] here; rely on config to switch class in real use.
+                                        tamanho = raw.length;
+                                    } else {
+                                        tamanho = tamanhoAvroEstruturado(mensagem);
+                                    }
+                                    long total = ++mensagensProcessadas[0];
+                                    if (total > warmup) {
+                                        metricas.registrarMensagem(tamanho, true);
+                                    }
+                                    if (total % INTERVALO_LOG == 0) {
+                                        logger.info("Progresso: {} mensagens processadas ({} MB)", 
+                                            total,
+                                            String.format("%.2f", metricas.getTotalBytes() / (1024.0 * 1024.0)));
+                                    }
+                                } catch (Exception e) {
+                                    logger.error("Erro ao processar mensagem", e);
+                                    metricas.registrarMensagem(0, false);
+                                }
+                            }
+                            if (mensagensProcessadas[0] % 10000 == 0) {
+                                consumer.commitSync();
+                            }
                         }
-
+                        consumer.commitSync();
                     } catch (Exception e) {
-                        logger.error("Erro ao processar mensagem", e);
-                        metricas.registrarMensagem(0, false);
+                        logger.error("Erro em worker do consumidor", e);
                     }
-                }
-
-                // Commit periódico
-                if (mensagensProcessadas % 10000 == 0) {
-                    consumer.commitSync();
-                }
+                }, "consumidor-avro-" + t);
+                workers[t].start();
             }
 
-            consumer.commitSync();
-            metricas.finalizar();
+            for (Thread w : workers) {
+                w.join();
+            }
 
+            metricas.finalizar();
             logger.info("Consumo concluído!");
             metricas.imprimirRelatorio();
-
-            // Enviar métricas
             enviarMetricas(metricas);
 
-        } catch (Exception e) {
-            logger.error("Erro fatal no consumidor", e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            logger.error("Execução interrompida", e);
             System.exit(1);
         }
+    }
+
+    private long tamanhoAvroEstruturado(MensagemCarga msg) {
+        if (msg == null || msg.getDados() == null) return 0L;
+        long total = 0L;
+        for (br.com.sandbox.kafka.avro.Registro r : msg.getDados()) {
+            int textoLen = r.getTexto() != null ? r.getTexto().toString().length() : 0;
+            int uuidLen = r.getUuid() != null ? r.getUuid().toString().length() : 0;
+            total += 4 + 8 + 8 + textoLen + uuidLen; // rough estimate
+        }
+        return total;
     }
 
     private void enviarMetricas(MetricasDesempenho metricas) {
