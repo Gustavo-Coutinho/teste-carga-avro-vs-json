@@ -45,6 +45,71 @@ public class ConfiguracaoKafka {
             return 10_000_000L;
         }
     }
+    
+    public static int obterTamanhoMensagemKB() {
+        String valorStr = System.getenv("TAMANHO_MENSAGEM_KB");
+        if (valorStr == null || valorStr.isEmpty()) {
+            // Valor padrão caso a variável não esteja definida (2MB)
+            return 2048;
+        }
+        try {
+            return Integer.parseInt(valorStr);
+        } catch (NumberFormatException e) {
+            // Logar erro e retornar valor padrão
+            LoggerFactory.getLogger(ConfiguracaoKafka.class).error("Erro ao converter TAMANHO_MENSAGEM_KB para int: {}", valorStr, e);
+            return 2048;
+        }
+    }
+
+    /**
+     * Número de partições do tópico. Usado para distribuição explícita no produtor
+     * e como padrão de threads de consumidor.
+     */
+    public static int obterNumParticoes() {
+        String valorStr = System.getenv("NUM_PARTICOES");
+        if (valorStr == null || valorStr.isEmpty()) {
+            return 18; // padrão atual
+        }
+        try {
+            return Integer.parseInt(valorStr);
+        } catch (NumberFormatException e) {
+            LoggerFactory.getLogger(ConfiguracaoKafka.class).error("Erro ao converter NUM_PARTICOES para int: {}", valorStr, e);
+            return 18;
+        }
+    }
+
+    /**
+     * Número de threads/instâncias de consumidor que o processo deve criar.
+     * Se não informado, usa o número de partições.
+     */
+    public static int obterConsumerThreads() {
+        String valorStr = System.getenv("CONSUMER_THREADS");
+        if (valorStr == null || valorStr.isEmpty()) {
+            return obterNumParticoes();
+        }
+        try {
+            return Integer.parseInt(valorStr);
+        } catch (NumberFormatException e) {
+            LoggerFactory.getLogger(ConfiguracaoKafka.class).error("Erro ao converter CONSUMER_THREADS para int: {}", valorStr, e);
+            return obterNumParticoes();
+        }
+    }
+
+    public static String obterBenchMode() {
+        String m = System.getenv("BENCH_MODE");
+        if (m == null || m.isEmpty()) return "E2E_PARSE";
+        return m.trim().toUpperCase();
+    }
+
+    public static boolean isTransporteMode() {
+        return "TRANSPORTE".equalsIgnoreCase(obterBenchMode());
+    }
+
+    public static long obterWarmupMensagens() {
+        String v = System.getenv("WARMUP_MENSAGENS");
+        if (v == null || v.isEmpty()) return 0L;
+        try { return Long.parseLong(v); } catch (NumberFormatException e) { return 0L; }
+    }
 
     public static Properties obterPropsProdutor(boolean usarAvro) {
         Properties props = new Properties();
@@ -62,8 +127,9 @@ public class ConfiguracaoKafka {
         ));
 
         // Otimizações para throughput
-        props.put(ProducerConfig.ACKS_CONFIG, "1");
-        props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "lz4");
+    props.put(ProducerConfig.ACKS_CONFIG, "1");
+    String compression = System.getenv().getOrDefault("COMPRESSION_TYPE", "lz4");
+    props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compression);
         props.put(ProducerConfig.BATCH_SIZE_CONFIG, "32768");
         props.put(ProducerConfig.LINGER_MS_CONFIG, "10");
         props.put(ProducerConfig.BUFFER_MEMORY_CONFIG, "67108864");
@@ -74,7 +140,8 @@ public class ConfiguracaoKafka {
             props.put(KafkaAvroSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, SCHEMA_REGISTRY_URL);
             props.put("basic.auth.credentials.source", "USER_INFO");
             props.put("basic.auth.user.info", SCHEMA_REGISTRY_API_KEY + ":" + SCHEMA_REGISTRY_API_SECRET);
-            props.put(KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS, "true");
+            String autoRegister = System.getenv().getOrDefault("AUTO_REGISTER_SCHEMAS", "true");
+            props.put(KafkaAvroSerializerConfig.AUTO_REGISTER_SCHEMAS, autoRegister);
         } else {
             props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         }
@@ -85,7 +152,7 @@ public class ConfiguracaoKafka {
     public static Properties obterPropsConsumidor(boolean usarAvro, String grupoConsumidor) {
         Properties props = new Properties();
 
-        // Configurações básicas
+    // Configurações básicas
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP_SERVERS);
         props.put(ConsumerConfig.GROUP_ID_CONFIG, grupoConsumidor);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
@@ -105,14 +172,20 @@ public class ConfiguracaoKafka {
         props.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "500");
         props.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, "3145728"); // 3MB
 
-        if (usarAvro) {
-            props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class.getName());
-            props.put(KafkaAvroSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, SCHEMA_REGISTRY_URL);
-            props.put("basic.auth.credentials.source", "USER_INFO");
-            props.put("basic.auth.user.info", SCHEMA_REGISTRY_API_KEY + ":" + SCHEMA_REGISTRY_API_SECRET);
-            props.put("specific.avro.reader", "true");
+        boolean transporte = isTransporteMode();
+        if (transporte) {
+            // Transport-only: não decodifica (bytes crus)
+            props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, org.apache.kafka.common.serialization.ByteArrayDeserializer.class.getName());
         } else {
-            props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+            if (usarAvro) {
+                props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, KafkaAvroDeserializer.class.getName());
+                props.put(KafkaAvroSerializerConfig.SCHEMA_REGISTRY_URL_CONFIG, SCHEMA_REGISTRY_URL);
+                props.put("basic.auth.credentials.source", "USER_INFO");
+                props.put("basic.auth.user.info", SCHEMA_REGISTRY_API_KEY + ":" + SCHEMA_REGISTRY_API_SECRET);
+                props.put("specific.avro.reader", "true");
+            } else {
+                props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+            }
         }
 
         return props;
