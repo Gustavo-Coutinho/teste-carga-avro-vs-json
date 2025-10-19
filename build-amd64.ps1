@@ -1,6 +1,6 @@
-# Build script for Windows
+# Script de build para Windows
 
-# Define variables
+# Define variáveis
 $IMAGE_NAME = "gupoco/teste-carga-avro-vs-json"
 $CONTAINER_NAME = "maven-build-container"
 $PROJECT_DIR = Get-Location
@@ -9,7 +9,7 @@ $VERSION_FILE = Join-Path $PROJECT_DIR "VERSION"
 $USE_CACHE = $env:USE_DOCKER_CACHE -eq "false" ? $false : $true
 $MAVEN_CACHE_VOLUME = "maven-cache-volume"
 
-# Function to get and increment version
+# Função para obter e incrementar a versão
 function Get-NextVersion {
     if (Test-Path $VERSION_FILE) {
         $currentVersion = Get-Content $VERSION_FILE -Raw | Out-String | ForEach-Object { $_.Trim() }
@@ -23,16 +23,16 @@ function Get-NextVersion {
     return $newVersion
 }
 
-# Get next version
+# Obtém a próxima versão
 $VERSION = Get-NextVersion
 Write-Host "Building version: $VERSION"
 
-# Create target directory if it doesn't exist
+# Cria o diretório target caso não exista
 if (-not (Test-Path $TARGET_DIR)) {
     New-Item -Path $TARGET_DIR -ItemType Directory | Out-Null
 }
 
-# Create or verify Maven cache volume exists
+# Cria ou verifica se o volume de cache do Maven existe
 Write-Host "Setting up Maven cache volume..."
 $volumeExists = docker volume ls --format "{{.Name}}" | Select-String -Pattern "^${MAVEN_CACHE_VOLUME}$" -Quiet
 if (-not $volumeExists) {
@@ -42,7 +42,7 @@ if (-not $volumeExists) {
     Write-Host "Using existing Maven cache volume: $MAVEN_CACHE_VOLUME"
 }
 
-# Run Maven in Docker directly with persistent cache
+# Executa o Maven em Docker com cache persistente
 Write-Host "Building with Maven in Docker (with persistent dependency cache)..."
 docker run --rm `
     -v "${PROJECT_DIR}:/app" `
@@ -52,7 +52,7 @@ docker run --rm `
     mvn clean package -DskipTests
 
 
-# Check if JAR was built successfully
+# Verifica se o JAR foi gerado com sucesso
 $JAR_FILE = Get-ChildItem -Path $TARGET_DIR -Name "*.jar" | Where-Object { $_ -notlike "*original*" } | Select-Object -First 1
 if (-not $JAR_FILE) {
     Write-Error "JAR file not found in target directory. Build may have failed."
@@ -61,10 +61,10 @@ if (-not $JAR_FILE) {
 
 Write-Host "JAR file built: $JAR_FILE"
 
-# Enable Docker BuildKit for faster builds
+# Habilita o Docker BuildKit para builds mais rápidos
 $env:DOCKER_BUILDKIT = "1"
 
-# Check that the JAR file exists and is accessible
+# Verifica se o arquivo JAR existe e está acessível
 $JAR_FULL_PATH = Join-Path -Path $TARGET_DIR -ChildPath $JAR_FILE
 if (-not (Test-Path $JAR_FULL_PATH)) {
     Write-Error "JAR file cannot be accessed at $JAR_FULL_PATH"
@@ -72,24 +72,24 @@ if (-not (Test-Path $JAR_FULL_PATH)) {
 }
 Write-Host "Verified JAR exists at: $JAR_FULL_PATH"
 
-# Build Docker image with optimized caching
+# Constrói a imagem Docker com cache otimizado
 Write-Host "Building Docker image with BuildKit: ${IMAGE_NAME}:${VERSION}..."
 Write-Host "Using cache: $USE_CACHE"
 
-# Create a temporary build context directory
+# Cria um diretório temporário para o contexto de build
 $BUILD_CONTEXT = Join-Path $PROJECT_DIR "docker-build-context"
 New-Item -Path $BUILD_CONTEXT -ItemType Directory -Force | Out-Null
 Write-Host "Created temporary build context at $BUILD_CONTEXT"
 
-# Copy the JAR file to the build context
+# Copia o arquivo JAR para o contexto de build
 Copy-Item -Path $JAR_FULL_PATH -Destination "$BUILD_CONTEXT/app.jar" -Force
 Write-Host "Copied JAR to build context as app.jar"
 
-# Copy Dockerfile to the build context
+# Copia o Dockerfile para o contexto de build
 Copy-Item -Path (Join-Path $PROJECT_DIR "Dockerfile") -Destination "$BUILD_CONTEXT/Dockerfile" -Force
 Write-Host "Copied Dockerfile to build context"
 
-# Update Dockerfile in the build context to use the simplified path
+# Atualiza o Dockerfile no contexto de build para usar o caminho simplificado
 $DockerfileContent = Get-Content -Path "$BUILD_CONTEXT/Dockerfile" -Raw
 $DockerfileContent = $DockerfileContent -replace "COPY \./target/\*.jar /app/aplicacao\.jar", "COPY app.jar /app/aplicacao.jar"
 Set-Content -Path "$BUILD_CONTEXT/Dockerfile" -Value $DockerfileContent -Force
@@ -115,13 +115,13 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Clean up temporary build context
+# Remove o contexto de build temporário
 Remove-Item -Path $BUILD_CONTEXT -Recurse -Force
 Write-Host "Cleaned up temporary build context"
 
 Write-Host "Docker image built successfully: ${IMAGE_NAME}:${VERSION}"
 
-# Clean up oldest local images (keep only the 2 most recent)
+# Remove as imagens locais mais antigas (mantém apenas as 2 mais recentes)
 Write-Host "Cleaning up oldest local images..."
 $existingImages = docker images "${IMAGE_NAME}" --format "{{.Repository}}:{{.Tag}} {{.CreatedAt}}" | 
     Where-Object { $_ -notlike "*latest*" } |
@@ -138,14 +138,14 @@ if ($existingImages) {
     Write-Host "No old images to clean up."
 }
 
-# tag the newest image as latest for local use
+# Marca a imagem mais recente como latest para uso local
 Write-Host "Tagging image as latest for local use..."
 docker tag "${IMAGE_NAME}:${VERSION}" "${IMAGE_NAME}:latest"
 
-# Push Docker image to registry with parallel layer uploads
+# Envia a imagem Docker para o registro com upload paralelo de camadas
 Write-Host "Pushing Docker image to registry..."
 
-# Push version tag first (usually the one we care about most)
+# Envia primeiro a tag de versão (geralmente a mais importante)
 Write-Host "Pushing ${IMAGE_NAME}:${VERSION}..."
 docker push "${IMAGE_NAME}:${VERSION}"
 
@@ -154,7 +154,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Push latest tag (this will be faster due to shared layers)
+# Envia a tag latest (mais rápido por reutilizar camadas)
 Write-Host "Pushing ${IMAGE_NAME}:latest..."
 docker push "${IMAGE_NAME}:latest"
 

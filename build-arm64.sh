@@ -1,9 +1,9 @@
 #!/bin/bash
-# Build script for Linux/macOS ARM64 platform
+# Script de build para Linux/macOS em ARM64
 
-set -e  # Exit on error
+set -e  # Encerra em caso de erro
 
-# Define variables
+# Define variáveis
 IMAGE_NAME="gupoco/teste-carga-avro-vs-json"
 CONTAINER_NAME="maven-build-container"
 PROJECT_DIR="$(pwd)"
@@ -17,7 +17,7 @@ else
 fi
 MAVEN_CACHE_VOLUME="maven-cache-volume"
 
-# Function to get and increment version
+# Função para obter e incrementar a versão
 get_next_version() {
     if [ -f "$VERSION_FILE" ]; then
         currentVersion=$(cat "$VERSION_FILE" | tr -d '[:space:]')
@@ -31,16 +31,16 @@ get_next_version() {
     echo "$newVersion"
 }
 
-# Get next version
+# Obtém a próxima versão
 VERSION=$(get_next_version)-arm64
 echo "Building version: $VERSION"
 
-# Create target directory if it doesn't exist
+# Cria o diretório target caso não exista
 if [ ! -d "$TARGET_DIR" ]; then
     mkdir -p "$TARGET_DIR"
 fi
 
-# Create or verify Maven cache volume exists
+# Cria ou verifica se o volume de cache do Maven existe
 echo "Setting up Maven cache volume..."
 if ! docker volume ls --format "{{.Name}}" | grep -q "^${MAVEN_CACHE_VOLUME}$"; then
     echo "Creating Maven cache volume: $MAVEN_CACHE_VOLUME"
@@ -49,11 +49,11 @@ else
     echo "Using existing Maven cache volume: $MAVEN_CACHE_VOLUME"
 fi
 
-# Pull the correct platform Maven image
+# Baixa a imagem do Maven para a plataforma correta
 echo "Pulling Maven image for ARM64 platform..."
 docker pull --platform linux/arm64 maven:3.9-eclipse-temurin-17
 
-# Run Maven in Docker directly with persistent cache
+# Executa o Maven em Docker com cache persistente
 echo "Building with Maven in Docker (with persistent dependency cache)..."
 docker run --rm \
     --platform linux/arm64 \
@@ -63,7 +63,7 @@ docker run --rm \
     maven:3.9-eclipse-temurin-17 \
     mvn clean package -DskipTests
 
-# Check if JAR was built successfully
+# Verifica se o JAR foi gerado com sucesso
 JAR_FILE=$(find "$TARGET_DIR" -maxdepth 1 -name "*.jar" ! -name "*original*" -type f | head -n 1)
 if [ -z "$JAR_FILE" ]; then
     echo "ERROR: JAR file not found in target directory. Build may have failed." >&2
@@ -72,27 +72,27 @@ fi
 
 echo "JAR file built: $(basename "$JAR_FILE")"
 
-# Create a temporary build context directory
+# Cria um diretório temporário para o contexto de build
 BUILD_CONTEXT="${PROJECT_DIR}/docker-build-context"
 mkdir -p "$BUILD_CONTEXT"
 echo "Created temporary build context at $BUILD_CONTEXT"
 
-# Copy the JAR file to the build context
+# Copia o arquivo JAR para o contexto de build
 cp "$JAR_FILE" "$BUILD_CONTEXT/app.jar"
 echo "Copied JAR to build context as app.jar"
 
-# Copy Dockerfile to the build context
+# Copia o Dockerfile para o contexto de build
 cp "${PROJECT_DIR}/Dockerfile" "$BUILD_CONTEXT/Dockerfile"
 echo "Copied Dockerfile to build context"
 
-# Update Dockerfile in the build context to use the simplified path
+# Atualiza o Dockerfile no contexto de build para usar o caminho simplificado
 sed -i 's|COPY .*target/.* /app/aplicacao.jar|COPY app.jar /app/aplicacao.jar|g' "$BUILD_CONTEXT/Dockerfile"
 echo "Updated Dockerfile in build context"
 
-# Enable Docker BuildKit for faster builds
+# Habilita o Docker BuildKit para builds mais rápidos
 export DOCKER_BUILDKIT=1
 
-# Build Docker image with optimized caching
+# Constrói a imagem Docker com cache otimizado
 echo "Building Docker image with BuildKit: ${IMAGE_NAME}:${VERSION}..."
 echo "Using cache: $USE_CACHE"
 
@@ -116,13 +116,13 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Clean up temporary build context
+# Remove o contexto de build temporário
 rm -rf "$BUILD_CONTEXT"
 echo "Cleaned up temporary build context"
 
 echo "Docker image built successfully: ${IMAGE_NAME}:${VERSION}"
 
-# Clean up oldest local images (keep only the 2 most recent)
+# Remove as imagens locais mais antigas (mantém apenas as 2 mais recentes)
 echo "Cleaning up oldest local images..."
 existingImages=$(docker images "${IMAGE_NAME}" --format "{{.Repository}}:{{.Tag}} {{.CreatedAt}}" | \
     grep -v ":latest" | \
@@ -140,14 +140,14 @@ else
     echo "No old images to clean up."
 fi
 
-# Tag the newest image as latest for local use
+# Marca a imagem mais recente como latest-arm64 para uso local
 echo "Tagging image as latest-arm64 for local use..."
 docker tag "${IMAGE_NAME}:${VERSION}" "${IMAGE_NAME}:latest-arm64"
 
-# Push Docker image to registry with parallel layer uploads
+# Envia a imagem Docker para o registro com upload paralelo de camadas
 echo "Pushing Docker image to registry..."
 
-# Push version tag first (usually the one we care about most)
+# Envia primeiro a tag de versão (geralmente a mais importante)
 echo "Pushing ${IMAGE_NAME}:${VERSION}..."
 docker push "${IMAGE_NAME}:${VERSION}"
 
@@ -156,7 +156,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Push latest tag (this will be faster due to shared layers)
+# Envia a tag latest-arm64 (mais rápido por reutilizar camadas)
 echo "Pushing ${IMAGE_NAME}:latest-arm64..."
 docker push "${IMAGE_NAME}:latest-arm64"
 
@@ -169,41 +169,6 @@ echo "Build and upload complete!"
 echo "Version: $VERSION"
 echo "Image: ${IMAGE_NAME}:${VERSION} and ${IMAGE_NAME}:latest-arm64"
 
-# Create a special docker-compose-arm64.yml file with platform specific settings
-cat > docker-compose-arm64.yml << EOF
-version: '3.8'
-
-services:
-  kafka-carga-app:
-    image: ${IMAGE_NAME}:latest-arm64
-    platform: linux/arm64
-    container_name: kafka-carga-sandbox
-    env_file:
-      - .env
-    environment:
-      - TIPO_APLICACAO=\${TIPO_APLICACAO}
-      - KAFKA_BOOTSTRAP_SERVERS=\${KAFKA_BOOTSTRAP_SERVERS}
-      - KAFKA_CLUSTER_API_KEY=\${KAFKA_CLUSTER_API_KEY}
-      - KAFKA_CLUSTER_API_SECRET=\${KAFKA_CLUSTER_API_SECRET}
-      - SCHEMA_REGISTRY_URL=\${SCHEMA_REGISTRY_URL}
-      - SCHEMA_REGISTRY_API_KEY=\${SCHEMA_REGISTRY_API_KEY}
-      - SCHEMA_REGISTRY_API_SECRET=\${SCHEMA_REGISTRY_API_SECRET}
-    networks:
-      - kafka-network
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 2G
-        reservations:
-          cpus: '1.0'
-          memory: 1G
-
-networks:
-  kafka-network:
-    driver: bridge
-EOF
-
-# Use the ARM64-specific docker-compose file
-docker compose -f docker-compose-arm64.yml down
-docker compose -f docker-compose-arm64.yml up -d
+# Usa o arquivo docker-compose específico para ARM64
+docker compose -f docker-compose-arm64.yaml down
+docker compose -f docker-compose-arm64.yaml up -d
