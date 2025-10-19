@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   kafka-carga-app:
     image: gupoco/teste-carga-avro-vs-json:latest
@@ -8,12 +6,14 @@ services:
       - .env
     environment:
       - TIPO_APLICACAO=${TIPO_APLICACAO}
-      - KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS}
-      - KAFKA_CLUSTER_API_KEY=${KAFKA_CLUSTER_API_KEY}
-      - KAFKA_CLUSTER_API_SECRET=${KAFKA_CLUSTER_API_SECRET}
-      - SCHEMA_REGISTRY_URL=${SCHEMA_REGISTRY_URL}
-      - SCHEMA_REGISTRY_API_KEY=${SCHEMA_REGISTRY_API_KEY}
-      - SCHEMA_REGISTRY_API_SECRET=${SCHEMA_REGISTRY_API_SECRET}
+      - TOTAL_MENSAGENS=${TOTAL_MENSAGENS}
+      - TAMANHO_MENSAGEM_KB=${TAMANHO_MENSAGEM_KB}
+      - KAFKA_BOOTSTRAP_SERVERS=${bootstrap_server}
+      - KAFKA_CLUSTER_API_KEY=${kafka_cluster_api_key}
+      - KAFKA_CLUSTER_API_SECRET=${kafka_cluster_api_secret}
+      - SCHEMA_REGISTRY_URL=${schema_registry_rest_endpoint}
+      - SCHEMA_REGISTRY_API_KEY=${schema_registry_api_key}
+      - SCHEMA_REGISTRY_API_SECRET=${schema_registry_api_secret}
     networks:
       - kafka-network
     deploy:
