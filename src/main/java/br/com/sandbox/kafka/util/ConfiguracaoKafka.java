@@ -105,6 +105,18 @@ public class ConfiguracaoKafka {
         return "TRANSPORTE".equalsIgnoreCase(obterBenchMode());
     }
 
+    /**
+     * Tipo de compressão configurado para o produtor (none|lz4|zstd|gzip).
+     * Padrão: lz4
+     */
+    public static String obterCompressionType() {
+        String valor = System.getenv("COMPRESSION_TYPE");
+        if (valor == null || valor.isEmpty()) {
+            return "lz4";
+        }
+        return valor.trim().toLowerCase();
+    }
+
     public static long obterWarmupMensagens() {
         String v = System.getenv("WARMUP_MENSAGENS");
         if (v == null || v.isEmpty()) return 0L;
@@ -127,9 +139,9 @@ public class ConfiguracaoKafka {
         ));
 
         // Otimizações para throughput
-    props.put(ProducerConfig.ACKS_CONFIG, "1");
-    String compression = System.getenv().getOrDefault("COMPRESSION_TYPE", "lz4");
-    props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compression);
+        props.put(ProducerConfig.ACKS_CONFIG, "1");
+        String compression = obterCompressionType();
+        props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compression);
         props.put(ProducerConfig.BATCH_SIZE_CONFIG, "32768");
         props.put(ProducerConfig.LINGER_MS_CONFIG, "10");
         props.put(ProducerConfig.BUFFER_MEMORY_CONFIG, "67108864");
