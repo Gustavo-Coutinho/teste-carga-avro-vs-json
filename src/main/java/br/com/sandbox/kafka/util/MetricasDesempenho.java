@@ -73,11 +73,11 @@ public class MetricasDesempenho {
 
     public Map<String, Object> gerarRelatorio() {
         Map<String, Object> relatorio = new HashMap<>();
-    relatorio.put("totalMensagens", totalMensagens.get());
-    relatorio.put("mensagensSucesso", mensagensSucesso.get());
-    relatorio.put("mensagensComErro", mensagensComErro.get());
-    relatorio.put("totalBytes", totalBytes.get());
-    relatorio.put("totalMB", String.format("%.2f", totalBytes.get() / (1024.0 * 1024.0)));
+        relatorio.put("totalMensagens", totalMensagens.get());
+        relatorio.put("mensagensSucesso", mensagensSucesso.get());
+        relatorio.put("mensagensComErro", mensagensComErro.get());
+        relatorio.put("totalBytes", totalBytes.get());
+        relatorio.put("totalMB", String.format("%.2f", totalBytes.get() / (1024.0 * 1024.0)));
         relatorio.put("duracaoMs", getDuracaoMs());
         relatorio.put("duracaoSegundos", String.format("%.2f", getDuracaoSegundos()));
         relatorio.put("throughputMensagensPorSegundo", String.format("%.2f", getThroughputMensagensPorSegundo()));
@@ -86,6 +86,20 @@ public class MetricasDesempenho {
         relatorio.put("taxaSucessoPorcentagem", String.format("%.2f", getTaxaSucesso()));
         relatorio.put("timestampInicio", tempoInicioMs);
         relatorio.put("timestampFim", tempoFimMs);
+
+        // Campos adicionais vindos do ambiente
+        try {
+            relatorio.put("threadsConsumidor", ConfiguracaoKafka.obterConsumerThreads());
+        } catch (Throwable ignored) { }
+        try {
+            relatorio.put("tamanhoMensagemKB", ConfiguracaoKafka.obterTamanhoMensagemKB());
+        } catch (Throwable ignored) { }
+        try {
+            relatorio.put("modoBenchmark", ConfiguracaoKafka.obterBenchMode());
+        } catch (Throwable ignored) { }
+        try {
+            relatorio.put("compressaoProdutor", ConfiguracaoKafka.obterCompressionType());
+        } catch (Throwable ignored) { }
 
         return relatorio;
     }
