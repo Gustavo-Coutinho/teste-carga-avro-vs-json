@@ -68,8 +68,21 @@ public class ConsumidorAvro {
                         });
                         // disparar ciclo de rebalance para obter assignment
                         consumer.poll(Duration.ofMillis(500));
+                        long ultimaMensagem = System.currentTimeMillis();
                         while (executando.get() && mensagensProcessadas[0] < totalAlvo) {
                             ConsumerRecords<String, MensagemCarga> records = consumer.poll(Duration.ofMillis(1000));
+                            
+                            // Verifica timeout por inatividade (30 segundos)
+                            if (records.isEmpty()) {
+                                long tempoInativo = System.currentTimeMillis() - ultimaMensagem;
+                                if (tempoInativo > 30000) {
+                                    logger.warn("Timeout por inatividade após {}ms sem mensagens ({} de {} processadas). Encerrando.", 
+                                               tempoInativo, mensagensProcessadas[0], totalAlvo);
+                                    break;
+                                }
+                            } else {
+                                ultimaMensagem = System.currentTimeMillis();
+                            }
                             for (ConsumerRecord<String, MensagemCarga> record : records) {
                                 try {
                                     MensagemCarga mensagem = record.value();
