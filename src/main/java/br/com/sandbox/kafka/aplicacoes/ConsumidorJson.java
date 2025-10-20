@@ -71,8 +71,21 @@ public class ConsumidorJson {
                             });
                             // disparar ciclo de rebalance para obter assignment
                             consumer.poll(Duration.ofMillis(500));
+                            long ultimaMensagem = System.currentTimeMillis();
                             while (executando.get() && mensagensProcessadas[0] < totalAlvo) {
                                 ConsumerRecords<String, byte[]> records = consumer.poll(Duration.ofMillis(1000));
+                                
+                                // Verifica timeout por inatividade (30 segundos)
+                                if (records.isEmpty()) {
+                                    long tempoInativo = System.currentTimeMillis() - ultimaMensagem;
+                                    if (tempoInativo > 30000) {
+                                        logger.warn("Timeout por inatividade após {}ms sem mensagens ({} de {} processadas). Encerrando.", 
+                                                   tempoInativo, mensagensProcessadas[0], totalAlvo);
+                                        break;
+                                    }
+                                } else {
+                                    ultimaMensagem = System.currentTimeMillis();
+                                }
                                 for (ConsumerRecord<String, byte[]> record : records) {
                                     try {
                                         long tamanho = record.serializedValueSize();
@@ -112,8 +125,21 @@ public class ConsumidorJson {
                             });
                             // disparar ciclo de rebalance para obter assignment
                             consumer.poll(Duration.ofMillis(500));
+                            long ultimaMensagem = System.currentTimeMillis();
                             while (executando.get() && mensagensProcessadas[0] < totalAlvo) {
                                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1000));
+                                
+                                // Verifica timeout por inatividade (30 segundos)
+                                if (records.isEmpty()) {
+                                    long tempoInativo = System.currentTimeMillis() - ultimaMensagem;
+                                    if (tempoInativo > 30000) {
+                                        logger.warn("Timeout por inatividade após {}ms sem mensagens ({} de {} processadas). Encerrando.", 
+                                                   tempoInativo, mensagensProcessadas[0], totalAlvo);
+                                        break;
+                                    }
+                                } else {
+                                    ultimaMensagem = System.currentTimeMillis();
+                                }
                                 for (ConsumerRecord<String, String> record : records) {
                                     try {
                                         String mensagemJson = record.value();
