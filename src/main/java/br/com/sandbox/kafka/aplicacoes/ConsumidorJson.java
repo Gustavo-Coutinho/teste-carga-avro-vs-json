@@ -5,6 +5,8 @@ import br.com.sandbox.kafka.util.MetricasDesempenho;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -57,7 +59,18 @@ public class ConsumidorJson {
                 if (transporte) {
                     workers[t] = new Thread(() -> {
                         try (KafkaConsumer<String, byte[]> consumer = new KafkaConsumer<>(props)) {
-                            consumer.subscribe(Collections.singletonList(TOPICO));
+                            consumer.subscribe(Collections.singletonList(TOPICO), new ConsumerRebalanceListener() {
+                                @Override
+                                public void onPartitionsRevoked(java.util.Collection<TopicPartition> partitions) {
+                                    // nada a fazer
+                                }
+                                @Override
+                                public void onPartitionsAssigned(java.util.Collection<TopicPartition> partitions) {
+                                    posicionarNoFimMenosN(consumer, totalAlvo, partitions);
+                                }
+                            });
+                            // disparar ciclo de rebalance para obter assignment
+                            consumer.poll(Duration.ofMillis(500));
                             while (executando.get() && mensagensProcessadas[0] < totalAlvo) {
                                 ConsumerRecords<String, byte[]> records = consumer.poll(Duration.ofMillis(1000));
                                 for (ConsumerRecord<String, byte[]> record : records) {
@@ -89,7 +102,16 @@ public class ConsumidorJson {
                 } else {
                     workers[t] = new Thread(() -> {
                         try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props)) {
-                            consumer.subscribe(Collections.singletonList(TOPICO));
+                            consumer.subscribe(Collections.singletonList(TOPICO), new ConsumerRebalanceListener() {
+                                @Override
+                                public void onPartitionsRevoked(java.util.Collection<TopicPartition> partitions) { }
+                                @Override
+                                public void onPartitionsAssigned(java.util.Collection<TopicPartition> partitions) {
+                                    posicionarNoFimMenosN(consumer, totalAlvo, partitions);
+                                }
+                            });
+                            // disparar ciclo de rebalance para obter assignment
+                            consumer.poll(Duration.ofMillis(500));
                             while (executando.get() && mensagensProcessadas[0] < totalAlvo) {
                                 ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1000));
                                 for (ConsumerRecord<String, String> record : records) {
@@ -157,6 +179,49 @@ public class ConsumidorJson {
 
         } catch (Exception e) {
             logger.error("Erro ao enviar métricas", e);
+        }
+    }
+
+    /**
+     * Posiciona o consumidor no offset de fim (latest) menos uma
+     * quantidade alvo de mensagens distribuída pelas partições atribuídas.
+     */
+    private void posicionarNoFimMenosN(KafkaConsumer<?, ?> consumer, long totalAlvo) {
+        try {
+            // Garantir assignment
+            int tentativas = 0;
+            while (consumer.assignment().isEmpty() && tentativas < 30) {
+                consumer.poll(Duration.ofMillis(200));
+                tentativas++;
+            }
+            if (consumer.assignment().isEmpty()) {
+                logger.warn("Não foi possível obter assignment para realizar seek inicial");
+                return;
+            }
+
+            java.util.Set<TopicPartition> parts = consumer.assignment();
+            posicionarNoFimMenosN(consumer, totalAlvo, parts);
+        } catch (Exception e) {
+            logger.warn("Falha ao posicionar offsets iniciais: {}", e.toString());
+        }
+    }
+
+    private void posicionarNoFimMenosN(KafkaConsumer<?, ?> consumer, long totalAlvo, java.util.Collection<TopicPartition> parts) {
+        try {
+            java.util.Map<TopicPartition, Long> end = consumer.endOffsets(parts);
+            java.util.Map<TopicPartition, Long> begin = consumer.beginningOffsets(parts);
+
+            long porParticao = Math.max(1L, (long) Math.ceil((double) totalAlvo / Math.max(1, parts.size())));
+            for (TopicPartition tp : parts) {
+                long endOff = end.getOrDefault(tp, 0L);
+                long beginOff = begin.getOrDefault(tp, 0L);
+                long start = Math.max(beginOff, endOff - porParticao);
+                consumer.seek(tp, start);
+                logger.info("Thread reposicionada em {}:{} -> {} (fim {}, início {}), alvo/partição {}",
+                        tp.topic(), tp.partition(), start, endOff, beginOff, porParticao);
+            }
+        } catch (Exception e) {
+            logger.warn("Falha ao posicionar offsets iniciais: {}", e.toString());
         }
     }
 }

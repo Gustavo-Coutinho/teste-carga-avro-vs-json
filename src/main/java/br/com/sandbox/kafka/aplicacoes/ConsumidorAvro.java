@@ -9,6 +9,8 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,6 +39,7 @@ public class ConsumidorAvro {
     final long totalMensagensEsperadas = ConfiguracaoKafka.obterTotalMensagens();
     final long warmup = ConfiguracaoKafka.obterWarmupMensagens();
     final boolean transporte = ConfiguracaoKafka.isTransporteMode();
+    final long totalAlvo = warmup + totalMensagensEsperadas;
         logger.info("Total de mensagens esperadas: {}", totalMensagensEsperadas);
 
     final int threads = ConfiguracaoKafka.obterConsumerThreads();
@@ -55,8 +58,17 @@ public class ConsumidorAvro {
             for (int t = 0; t < threads; t++) {
                 workers[t] = new Thread(() -> {
                     try (KafkaConsumer<String, MensagemCarga> consumer = new KafkaConsumer<>(props)) {
-                        consumer.subscribe(Collections.singletonList(TOPICO));
-                        while (executando.get() && mensagensProcessadas[0] < totalMensagensEsperadas) {
+                        consumer.subscribe(Collections.singletonList(TOPICO), new ConsumerRebalanceListener() {
+                            @Override
+                            public void onPartitionsRevoked(java.util.Collection<TopicPartition> partitions) { }
+                            @Override
+                            public void onPartitionsAssigned(java.util.Collection<TopicPartition> partitions) {
+                                posicionarNoFimMenosN(consumer, totalAlvo, partitions);
+                            }
+                        });
+                        // disparar ciclo de rebalance para obter assignment
+                        consumer.poll(Duration.ofMillis(500));
+                        while (executando.get() && mensagensProcessadas[0] < totalAlvo) {
                             ConsumerRecords<String, MensagemCarga> records = consumer.poll(Duration.ofMillis(1000));
                             for (ConsumerRecord<String, MensagemCarga> record : records) {
                                 try {
@@ -108,6 +120,49 @@ public class ConsumidorAvro {
             Thread.currentThread().interrupt();
             logger.error("Execução interrompida", e);
             System.exit(1);
+        }
+    }
+
+    /**
+     * Posiciona o consumidor no offset de fim (latest) menos uma
+     * quantidade alvo de mensagens distribuída pelas partições atribuídas.
+     */
+    private void posicionarNoFimMenosN(KafkaConsumer<?, ?> consumer, long totalAlvo) {
+        try {
+            // Garantir assignment
+            int tentativas = 0;
+            while (consumer.assignment().isEmpty() && tentativas < 30) {
+                consumer.poll(Duration.ofMillis(200));
+                tentativas++;
+            }
+            if (consumer.assignment().isEmpty()) {
+                logger.warn("Não foi possível obter assignment para realizar seek inicial");
+                return;
+            }
+
+            java.util.Set<TopicPartition> parts = consumer.assignment();
+            posicionarNoFimMenosN(consumer, totalAlvo, parts);
+        } catch (Exception e) {
+            logger.warn("Falha ao posicionar offsets iniciais: {}", e.toString());
+        }
+    }
+
+    private void posicionarNoFimMenosN(KafkaConsumer<?, ?> consumer, long totalAlvo, java.util.Collection<TopicPartition> parts) {
+        try {
+            java.util.Map<TopicPartition, Long> end = consumer.endOffsets(parts);
+            java.util.Map<TopicPartition, Long> begin = consumer.beginningOffsets(parts);
+
+            long porParticao = Math.max(1L, (long) Math.ceil((double) totalAlvo / Math.max(1, parts.size())));
+            for (TopicPartition tp : parts) {
+                long endOff = end.getOrDefault(tp, 0L);
+                long beginOff = begin.getOrDefault(tp, 0L);
+                long start = Math.max(beginOff, endOff - porParticao);
+                consumer.seek(tp, start);
+                logger.info("Thread reposicionada em {}:{} -> {} (fim {}, início {}), alvo/partição {}",
+                        tp.topic(), tp.partition(), start, endOff, beginOff, porParticao);
+            }
+        } catch (Exception e) {
+            logger.warn("Falha ao posicionar offsets iniciais: {}", e.toString());
         }
     }
 
