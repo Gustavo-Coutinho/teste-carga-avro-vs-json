@@ -1,7 +1,7 @@
 # Teste de Carga Kafka: Avro vs. JSON com Benchmarking Avançado
 
-[!NOTE]
-Link da apresentação do TCC:
+> [!NOTE]
+> Link da apresentação do TCC:
 
 https://youtu.be/HH218oy6rF0?si=cv8i10xucoJtxoPa
 
