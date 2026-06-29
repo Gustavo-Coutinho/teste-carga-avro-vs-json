@@ -1,9 +1,7 @@
 # Teste de Carga Kafka: Avro vs. JSON com Benchmarking Avançado
 
 > [!NOTE]
-> Link da apresentação do TCC:
-
-https://youtu.be/HH218oy6rF0?si=cv8i10xucoJtxoPa
+> Link da apresentação do TCC: https://youtu.be/HH218oy6rF0?si=cv8i10xucoJtxoPa
 
 
 Este projeto contém um conjunto de aplicações Java para realizar testes de carga e benchmarks de performance no Confluent Cloud Kafka, comparando a serialização Avro com JSON. O sistema foi projetado para ser altamente configurável, permitindo testes em múltiplos cenários, incluindo diferentes tamanhos de mensagem, compressão, e modos de benchmark.
